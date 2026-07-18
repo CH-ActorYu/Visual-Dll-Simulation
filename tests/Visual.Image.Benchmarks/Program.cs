@@ -1,1 +1,3 @@
-Console.WriteLine("Visual.Image benchmarks are scheduled for M1.");
+using BenchmarkDotNet.Running;
+
+BenchmarkSwitcher.FromAssembly(typeof(Program).Assembly).Run(args);

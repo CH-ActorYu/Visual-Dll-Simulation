@@ -80,6 +80,20 @@ public sealed class ArchitectureRulesTests
         Assert.Empty(violations);
     }
 
+    [Fact]
+    public void Core_public_types_must_be_declared_in_contract_namespaces()
+    {
+        var violations = CoreAssemblyNames
+            .Select(LoadAssembly)
+            .SelectMany(assembly => assembly.GetExportedTypes())
+            .Where(type => type.Namespace is null || !type.Namespace.EndsWith(".Contracts", StringComparison.Ordinal))
+            .Select(type => type.FullName ?? type.Name)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Empty(violations);
+    }
+
     private static Assembly LoadAssembly(string name) => Assembly.Load(new AssemblyName(name));
 
     private static IEnumerable<string> GetProjectFiles(IEnumerable<string> assemblyNames)
