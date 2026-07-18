@@ -3,7 +3,7 @@ using Visual.Image.Contracts;
 
 namespace Visual.Vision.Contracts;
 
-public interface ITracker
+public interface ITracker : IDisposable
 {
     void Initialize(ImageFrame frame, RoiRect roi);
 

@@ -173,5 +173,9 @@ public sealed class VisionPipelineTests
         }
 
         public TargetCandidate? Update(ImageFrame frame) => Next;
+
+        public void Dispose()
+        {
+        }
     }
 }
