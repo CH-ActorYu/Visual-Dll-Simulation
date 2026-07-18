@@ -17,5 +17,5 @@
 | — | — | — | — | — | 暂无记录 | | | |
 
 <!-- 示例（填写时删除此行注释）：
-| I-001 | 2026-07-20 | P1 | ✅ 已解决 | Visual.IO | 摄像头拔出后 FrameReady 停止但无错误事件 | 采集循环未检测 Read 失败返回值 | UsbCameraSource 增加 Read 失败计数，连续 5 次失败触发 SourceFailed | a1b2c3d |
+| I-001 | 2026-07-20 | P1 | ✅ 已解决 | Visual.IO | 摄像头拔出后 `ReadFramesAsync` 未结束且状态未变化 | 采集循环未检测 Read 失败返回值 | CameraSource 增加连续失败计数并转换为 `Reconnecting`/`Failed` 状态 | a1b2c3d |
 -->
