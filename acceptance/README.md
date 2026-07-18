@@ -37,3 +37,12 @@ dotnet run --project acceptance/Visual.AcceptanceRunner -c Release -- --mode sta
 ```
 
 JSON 报告默认写入 `artifacts/acceptance/`。运行器每 10 秒输出进度，并记录吞吐、处理耗时平均/P95/P99、丢帧、托管堆、Working Set 和 Private Bytes。
+
+两小时测试建议使用后台管理脚本：
+
+```powershell
+./tools/acceptance/Start-S8.ps1
+./tools/acceptance/Get-S8Status.ps1
+```
+
+启动脚本拒绝重复实例，并记录 PID、开始时间、预计结束时间、标准输出、错误输出和退出码。状态脚本不会修改运行中的进程。
