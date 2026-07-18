@@ -27,8 +27,9 @@ if ($LASTEXITCODE -ne 0) { throw 'Acceptance runner Release build failed.' }
 Remove-Item -LiteralPath $stdoutPath,$stderrPath,$exitCodePath -Force -ErrorAction SilentlyContinue
 $startedAt = [DateTimeOffset]::Now
 $powershell = (Get-Process -Id $PID).Path
+$workerArguments = "-NoProfile -ExecutionPolicy Bypass -File `"$worker`""
 $process = Start-Process -FilePath $powershell `
-    -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File',$worker `
+    -ArgumentList $workerArguments `
     -WorkingDirectory $repositoryRoot `
     -RedirectStandardOutput $stdoutPath `
     -RedirectStandardError $stderrPath `
