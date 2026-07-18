@@ -1,0 +1,15 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\Visual.AppCore\Visual.AppCore.csproj" />
+    <ProjectReference Include="..\..\engines\Visual.Engine.OpenCv\Visual.Engine.OpenCv.csproj" />
+    <ProjectReference Include="..\..\modules\Visual.Distance\Visual.Distance.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+  </PropertyGroup>
+
+</Project>

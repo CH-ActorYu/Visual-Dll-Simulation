@@ -1,0 +1,18 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\shared\Visual.Abstractions\Visual.Abstractions.csproj" />
+    <ProjectReference Include="..\..\src\shared\Visual.Image\Visual.Image.csproj" />
+    <ProjectReference Include="..\..\src\shared\Visual.IO\Visual.IO.csproj" />
+    <ProjectReference Include="..\..\src\shared\Visual.Vision.Contracts\Visual.Vision.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\shared\Visual.VisionBase\Visual.VisionBase.csproj" />
+    <ProjectReference Include="..\..\src\engines\Visual.Engine.OpenCv\Visual.Engine.OpenCv.csproj" />
+    <ProjectReference Include="..\..\src\modules\Visual.Distance\Visual.Distance.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+
+</Project>

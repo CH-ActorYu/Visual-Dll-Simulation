@@ -1,0 +1,14 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\Visual.Abstractions\Visual.Abstractions.csproj" />
+    <ProjectReference Include="..\Visual.Image\Visual.Image.csproj" />
+    <ProjectReference Include="..\Visual.IO\Visual.IO.csproj" />
+    <ProjectReference Include="..\Visual.Vision.Contracts\Visual.Vision.Contracts.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+
+</Project>

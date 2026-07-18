@@ -20,7 +20,7 @@
 - MahApps.Metro、MaterialDesignInXaml
 - CommunityToolkit.Mvvm
 - Microsoft.Extensions.DependencyInjection
-- 视觉引擎适配：OpenCV（当前实现）；HALCON、VisionPro（预留）
+- 视觉引擎适配：OpenCV（本期唯一实现目标）；HALCON、VisionPro（仅保留文档边界）
 - 三维扩展：VTK（后续独立方向）
 
 ## 项目结构
@@ -35,9 +35,7 @@ Visual/
 │  │  ├─ Visual.Vision.Contracts/ # 检测、跟踪、预处理等与引擎无关的接口
 │  │  └─ Visual.VisionBase/      # 引擎无关的几何、结果整理和公共流程
 │  ├─ engines/
-│  │  ├─ Visual.Engine.OpenCv/   # OpenCV 适配器（当前实现）
-│  │  ├─ Visual.Engine.Halcon/   # HALCON 适配器（预留）
-│  │  └─ Visual.Engine.VisionPro/ # VisionPro 适配器（预留）
+│  │  └─ Visual.Engine.OpenCv/   # OpenCV 适配器；其他引擎不创建空工程
 │  ├─ modules/
 │  │  └─ Visual.Distance/        # 测距模块：Contracts 对外，Internal 对内
 │  └─ app/

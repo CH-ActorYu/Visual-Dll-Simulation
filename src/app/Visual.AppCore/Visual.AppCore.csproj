@@ -1,0 +1,17 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\shared\Visual.Abstractions\Visual.Abstractions.csproj" />
+    <ProjectReference Include="..\..\shared\Visual.Image\Visual.Image.csproj" />
+    <ProjectReference Include="..\..\shared\Visual.IO\Visual.IO.csproj" />
+    <ProjectReference Include="..\..\shared\Visual.Vision.Contracts\Visual.Vision.Contracts.csproj" />
+    <ProjectReference Include="..\..\shared\Visual.VisionBase\Visual.VisionBase.csproj" />
+    <ProjectReference Include="..\..\modules\Visual.Distance\Visual.Distance.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+  </PropertyGroup>
+
+</Project>
