@@ -12,7 +12,7 @@
 
 仓库名沿用最初的"视觉识别与距离"（Visual Recognition and Distance），后续新增功能按 `Visual.<功能>` 扩展，不局限于此。
 
-完整文档入口见 [docs/README](docs/README.md)，详细需求见 [docs/01-需求规格说明书](docs/01-需求规格说明书.md)。
+完整文档入口见 [需求规格说明书](docs/01-需求规格说明书.md)，执行进度见 [执行计划](docs/03-执行计划.md)。
 
 ## 技术栈
 
@@ -75,6 +75,14 @@ dotnet run --project samples/Visual.Distance.ConsoleDemo
 ```
 
 无参数时 Demo 会生成短测试视频并连续输出距离；也可传入 `视频路径 参考像素宽度 参考距离 目标真实宽度 最大帧数`。
+
+WPF 软件壳可直接启动：
+
+```powershell
+dotnet run --project src/app/Visual.App
+```
+
+选择视频并启动后，可在画面拖动圈选 ROI；录入参照物实际宽度、像素宽度与参照距离后应用标定，界面将显示检测框、中心点、距离和运行状态。配置保存在当前用户的本地应用数据目录。
 
 ## 本期范围
 

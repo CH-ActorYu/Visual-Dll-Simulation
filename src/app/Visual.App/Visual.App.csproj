@@ -1,6 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.10" />
     <ProjectReference Include="..\Visual.AppCore\Visual.AppCore.csproj" />
     <ProjectReference Include="..\..\engines\Visual.Engine.OpenCv\Visual.Engine.OpenCv.csproj" />
     <ProjectReference Include="..\..\modules\Visual.Distance\Visual.Distance.csproj" />

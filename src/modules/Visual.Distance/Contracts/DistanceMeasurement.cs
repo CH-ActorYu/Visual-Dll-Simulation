@@ -11,6 +11,7 @@ public sealed record DistanceMeasurement : VisionResultBase
         double? distance,
         DistanceUnit unit,
         double confidence,
+        RoiRect? targetBounds,
         Point2D? targetCenter,
         double? targetPixelSize,
         FrameTiming timing,
@@ -24,7 +25,7 @@ public sealed record DistanceMeasurement : VisionResultBase
         }
 
         if (status == VisionResultStatus.Valid &&
-            (distance is null || !double.IsFinite(distance.Value) || distance <= 0 ||
+             (distance is null || !double.IsFinite(distance.Value) || distance <= 0 || targetBounds is null ||
              targetCenter is null || targetPixelSize is null || targetPixelSize <= 0))
         {
             throw new VisionException(VisionErrorCode.InvalidInput, "A valid measurement requires distance, center and pixel size.");
@@ -38,6 +39,7 @@ public sealed record DistanceMeasurement : VisionResultBase
         TargetId = targetId;
         Distance = distance;
         Unit = unit;
+        TargetBounds = targetBounds;
         TargetCenter = targetCenter;
         TargetPixelSize = targetPixelSize;
     }
@@ -47,6 +49,8 @@ public sealed record DistanceMeasurement : VisionResultBase
     public double? Distance { get; }
 
     public DistanceUnit Unit { get; }
+
+    public RoiRect? TargetBounds { get; }
 
     public Point2D? TargetCenter { get; }
 

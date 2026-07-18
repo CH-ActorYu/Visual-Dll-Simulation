@@ -1,12 +1,114 @@
 ﻿<Window x:Class="Visual.App.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:local="clr-namespace:Visual.App"
-        mc:Ignorable="d"
-        Title="MainWindow" Height="450" Width="800">
-    <Grid>
+        Title="视觉识别与测距" Height="760" Width="1180" MinHeight="620" MinWidth="940"
+        Background="#15191F">
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+        <Style TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#E8EDF2" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style TargetType="TextBox">
+            <Setter Property="Margin" Value="4" />
+            <Setter Property="Padding" Value="7,5" />
+        </Style>
+        <Style TargetType="Button">
+            <Setter Property="Margin" Value="4" />
+            <Setter Property="Padding" Value="14,6" />
+        </Style>
+    </Window.Resources>
+    <Grid Margin="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
 
+        <Border Grid.Row="0" Background="#20262E" CornerRadius="6" Padding="8" Margin="0,0,0,10">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="190" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="视频" Margin="6" />
+                <TextBox Grid.Column="1" Text="{Binding VideoPath, UpdateSourceTrigger=PropertyChanged}" />
+                <Button Grid.Column="2" Content="浏览…" Click="BrowseVideo_Click" />
+                <ComboBox Grid.Column="3" Margin="4" Padding="6" ItemsSource="{Binding Engines}"
+                          SelectedItem="{Binding SelectedEngine}" DisplayMemberPath="Name" />
+                <Button Grid.Column="4" Content="启动" Command="{Binding StartCommand}" />
+                <Button Grid.Column="5" Content="停止" Command="{Binding StopCommand}" />
+                <Button Grid.Column="6" Content="清除 ROI" Command="{Binding ClearRoiCommand}" />
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="310" />
+            </Grid.ColumnDefinitions>
+            <Border Grid.Column="0" Background="Black" BorderBrush="#38424D" BorderThickness="1" CornerRadius="4" Margin="0,0,10,0">
+                <Grid x:Name="PreviewViewport" ClipToBounds="True" Background="Black"
+                      MouseLeftButtonDown="Preview_MouseLeftButtonDown"
+                      MouseLeftButtonUp="Preview_MouseLeftButtonUp"
+                      SizeChanged="Preview_SizeChanged">
+                    <Image Source="{Binding PreviewImage}" Stretch="Uniform" IsHitTestVisible="False" />
+                    <Canvas IsHitTestVisible="False">
+                        <Rectangle Canvas.Left="{Binding Overlay.SelectionX}" Canvas.Top="{Binding Overlay.SelectionY}"
+                                   Width="{Binding Overlay.SelectionWidth}" Height="{Binding Overlay.SelectionHeight}"
+                                   Stroke="#28D7FF" StrokeThickness="2" Fill="#2028D7FF"
+                                   Visibility="{Binding Overlay.HasSelection, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                        <Rectangle Canvas.Left="{Binding Overlay.TargetX}" Canvas.Top="{Binding Overlay.TargetY}"
+                                   Width="{Binding Overlay.TargetWidth}" Height="{Binding Overlay.TargetHeight}"
+                                   Stroke="#FFD84A" StrokeThickness="2"
+                                   Visibility="{Binding Overlay.HasTarget, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                        <Ellipse Canvas.Left="{Binding Overlay.CenterX}" Canvas.Top="{Binding Overlay.CenterY}"
+                                 Width="10" Height="10" Margin="-5,-5,0,0" Fill="#FF4D4D"
+                                 Visibility="{Binding Overlay.HasCenter, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                        <Border Canvas.Left="{Binding Overlay.SelectionX}" Canvas.Top="{Binding Overlay.SelectionY}"
+                                Margin="0,-30,0,0" Background="#CC111820" Padding="6,3"
+                                Visibility="{Binding Overlay.HasSelection, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <TextBlock Text="{Binding DistanceText}" FontSize="16" FontWeight="SemiBold" Foreground="#7BE4FF" />
+                        </Border>
+                    </Canvas>
+                </Grid>
+            </Border>
+
+            <StackPanel Grid.Column="1">
+                <Border Background="#20262E" CornerRadius="6" Padding="14" Margin="0,0,0,10">
+                    <StackPanel>
+                        <TextBlock Text="实时测距" FontSize="18" FontWeight="SemiBold" />
+                        <TextBlock Text="{Binding DistanceText}" FontSize="36" FontWeight="Bold" Foreground="#28D7FF" Margin="0,10" />
+                        <TextBlock Text="{Binding StatusText}" FontSize="16" />
+                    </StackPanel>
+                </Border>
+                <Border Background="#20262E" CornerRadius="6" Padding="14">
+                    <StackPanel>
+                        <TextBlock Text="标定参数（mm）" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,8" />
+                        <TextBlock Text="目标实际宽度" /><TextBox Text="{Binding Calibration.TargetWidth}" />
+                        <TextBlock Text="参照图像中的像素宽度" /><TextBox Text="{Binding Calibration.ReferencePixelWidth}" />
+                        <TextBlock Text="参照距离" /><TextBox Text="{Binding Calibration.ReferenceDistance}" />
+                        <Grid>
+                            <Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition /></Grid.ColumnDefinitions>
+                            <StackPanel><TextBlock Text="最小有效距离" /><TextBox Text="{Binding Calibration.MinimumDistance}" /></StackPanel>
+                            <StackPanel Grid.Column="1"><TextBlock Text="最大有效距离" /><TextBox Text="{Binding Calibration.MaximumDistance}" /></StackPanel>
+                        </Grid>
+                        <Button Content="应用并保存标定" Command="{Binding ApplyCalibrationCommand}" HorizontalAlignment="Stretch" Margin="4,10,4,4" />
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </Grid>
+
+        <Border Grid.Row="2" Background="#20262E" CornerRadius="5" Padding="10,7" Margin="0,10,0,0">
+            <DockPanel>
+                <TextBlock Text="{Binding StatusText}" Foreground="#28D7FF" FontWeight="SemiBold" Margin="0,0,16,0" />
+                <TextBlock Text="{Binding DiagnosticText}" Foreground="#AAB4BE" />
+            </DockPanel>
+        </Border>
     </Grid>
 </Window>

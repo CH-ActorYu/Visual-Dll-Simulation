@@ -26,6 +26,7 @@ public sealed class DistanceServiceTests
         Assert.Equal(VisionResultStatus.Valid, result.Status);
         Assert.Equal(expectedDistance, result.Distance!.Value, 6);
         Assert.Equal(DistanceUnit.Mm, result.Unit);
+        Assert.NotNull(result.TargetBounds);
         Assert.Equal(pixelSize, result.TargetPixelSize);
         Assert.False(frame.IsReleased);
     }
@@ -78,6 +79,7 @@ public sealed class DistanceServiceTests
 
         Assert.Equal(VisionResultStatus.NotDetected, result.Status);
         Assert.Null(result.Distance);
+        Assert.Null(result.TargetBounds);
         Assert.Null(result.TargetCenter);
     }
 

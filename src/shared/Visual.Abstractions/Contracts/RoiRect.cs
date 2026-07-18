@@ -1,7 +1,10 @@
+using System.Text.Json.Serialization;
+
 namespace Visual.Abstractions.Contracts;
 
 public readonly record struct RoiRect
 {
+    [JsonConstructor]
     public RoiRect(int x, int y, int width, int height)
     {
         if (width <= 0 || height <= 0)
