@@ -15,3 +15,25 @@
 `runtimes/win-x64/native/OpenCvSharpExtern.dll` 和
 `opencv_videoio_ffmpeg4130_64.dll` 复制到可执行文件目录。消费者工程同时保留
 `runtimes/` 布局，并显式执行这一步。
+
+## S7/S8：性能与稳定性运行器
+
+短时验证：
+
+```powershell
+dotnet run --project acceptance/Visual.AcceptanceRunner -c Release -- --mode smoke
+```
+
+正式 S7（720p、预热 30 秒、统计 10 分钟）：
+
+```powershell
+dotnet run --project acceptance/Visual.AcceptanceRunner -c Release -- --mode performance
+```
+
+正式 S8（720p、预热 30 秒、统计 2 小时）：
+
+```powershell
+dotnet run --project acceptance/Visual.AcceptanceRunner -c Release -- --mode stability
+```
+
+JSON 报告默认写入 `artifacts/acceptance/`。运行器每 10 秒输出进度，并记录吞吐、处理耗时平均/P95/P99、丢帧、托管堆、Working Set 和 Private Bytes。
