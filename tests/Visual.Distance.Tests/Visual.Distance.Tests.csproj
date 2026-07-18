@@ -17,6 +17,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\src\engines\Visual.Engine.OpenCv\Visual.Engine.OpenCv.csproj" />
     <ProjectReference Include="..\..\src\modules\Visual.Distance\Visual.Distance.csproj" />
   </ItemGroup>
 

@@ -55,7 +55,7 @@ Visual/
 ```csharp
 var engine = engineProvider.Get("OpenCv");
 var profile = DetectionProfile.CreateDefault();
-var svc = new DistanceServiceBuilder()
+await using var svc = new DistanceServiceBuilder()
     .WithEngine(engine)
     .WithDetectionProfile(profile)
     .Build();
@@ -67,6 +67,14 @@ var results = await svc.MeasureAsync(request, cancellationToken);
 ```
 
 未标定单帧调用会抛 `NotCalibratedException`。实时场景使用 `MeasureStreamAsync(...)` 返回的 `IAsyncEnumerable<IReadOnlyList<DistanceMeasurement>>`，通过 `CancellationToken` 停止。
+
+无 UI 视频闭环可直接运行：
+
+```powershell
+dotnet run --project samples/Visual.Distance.ConsoleDemo
+```
+
+无参数时 Demo 会生成短测试视频并连续输出距离；也可传入 `视频路径 参考像素宽度 参考距离 目标真实宽度 最大帧数`。
 
 ## 本期范围
 
