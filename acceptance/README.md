@@ -30,7 +30,7 @@ dotnet run --project acceptance/Visual.AcceptanceRunner -c Release -- --mode smo
 dotnet run --project acceptance/Visual.AcceptanceRunner -c Release -- --mode performance
 ```
 
-正式 S8（720p、预热 30 秒、统计 2 小时）：
+正式 S8（720p、预热 30 分钟、随后统计完整 2 小时，总运行约 2.5 小时）：
 
 ```powershell
 dotnet run --project acceptance/Visual.AcceptanceRunner -c Release -- --mode stability

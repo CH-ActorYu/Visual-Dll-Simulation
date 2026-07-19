@@ -301,7 +301,12 @@ internal sealed record RunnerOptions(
         return new RunnerOptions(
             mode,
             ReadPositive(values, "duration-seconds", defaultDuration),
-            ReadNonNegative(values, "warmup-seconds", mode == "smoke" ? 2 : 30),
+            ReadNonNegative(values, "warmup-seconds", mode switch
+            {
+                "smoke" => 2,
+                "stability" => 1800,
+                _ => 30
+            }),
             ReadPositive(values, "sample-seconds", mode == "smoke" ? 2 : 10),
             Read(values, "output", System.IO.Path.Combine("artifacts", "acceptance", $"{mode}.json")),
             ReadPositiveInt(values, "width", 1280),
