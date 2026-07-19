@@ -121,6 +121,10 @@ public sealed class OpenCvFrameSourceTests
 
             Assert.True(source.LoopPlayback);
             await source.StopAsync();
+            var statistics = source.MemoryPoolStatistics;
+            Assert.True(statistics.TotalRented >= 5);
+            Assert.Equal(statistics.TotalRented, statistics.TotalReturned);
+            Assert.Equal(0, statistics.Outstanding);
         }
         finally
         {

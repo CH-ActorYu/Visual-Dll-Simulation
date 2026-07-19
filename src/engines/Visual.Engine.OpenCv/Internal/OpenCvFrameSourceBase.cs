@@ -8,13 +8,17 @@ namespace Visual.Engine.OpenCv.Contracts;
 
 public abstract class OpenCvFrameSourceBase : BufferedFrameSourceBase
 {
-    private readonly OpenCvImageAdapter _adapter = new();
+    private readonly ImageMemoryPool _memoryPool = new();
+    private readonly OpenCvImageAdapter _adapter;
     private long _frameIndex;
 
     protected OpenCvFrameSourceBase(string sourceId, int bufferCapacity)
         : base(sourceId, bufferCapacity)
     {
+        _adapter = new OpenCvImageAdapter(new ImageFrameFactory(_memoryPool));
     }
+
+    public ImageMemoryPoolStatistics MemoryPoolStatistics => _memoryPool.GetStatistics();
 
     private protected bool Publish(Mat mat)
     {

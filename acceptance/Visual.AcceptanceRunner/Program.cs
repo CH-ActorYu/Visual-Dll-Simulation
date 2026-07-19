@@ -4,6 +4,7 @@ using OpenCvSharp;
 using Visual.Abstractions.Contracts;
 using Visual.Distance.Contracts;
 using Visual.Engine.OpenCv.Contracts;
+using Visual.Image.Contracts;
 using Visual.Vision.Contracts;
 
 var options = RunnerOptions.Parse(args);
@@ -33,6 +34,10 @@ long validFrames = 0;
 long notDetectedFrames = 0;
 long failedFrames = 0;
 long droppedFrames = 0;
+long warmupDroppedFrames = 0;
+var measurementInitialized = false;
+var warmupHighWaterTriggered = false;
+var finalPoolStatistics = default(ImageMemoryPoolStatistics);
 var completed = false;
 
 try
@@ -67,8 +72,21 @@ try
         {
             totalFrames++;
             var elapsed = stopwatch.Elapsed;
+            if (!warmupHighWaterTriggered && options.Mode == "stability")
+            {
+                warmupHighWaterTriggered = true;
+                await Task.Delay(TimeSpan.FromMilliseconds(300), cancellation.Token);
+                elapsed = stopwatch.Elapsed;
+            }
+
             if (elapsed >= measurementStartedAt)
             {
+                if (!measurementInitialized)
+                {
+                    measurementInitialized = true;
+                    warmupDroppedFrames = droppedFrames + source.DroppedCount;
+                }
+
                 var measurement = batch[0];
                 measuredFrames++;
                 processingTimes.Add(measurement.Timing.ProcessingDuration.TotalMilliseconds);
@@ -94,12 +112,14 @@ try
                         process.WorkingSet64,
                         process.PrivateMemorySize64,
                         measuredFrames,
-                        droppedFrames + source.DroppedCount);
+                        Math.Max(0, droppedFrames + source.DroppedCount - warmupDroppedFrames),
+                        source.MemoryPoolStatistics);
                     samples.Add(sample);
                     Console.WriteLine(
                         $"ACCEPTANCE_PROGRESS measured={sample.ElapsedSeconds:F0}s frames={measuredFrames} " +
                         $"workingSetMB={ToMb(sample.WorkingSetBytes):F1} privateMB={ToMb(sample.PrivateBytes):F1} " +
-                        $"dropped={sample.DroppedFrames}");
+                        $"dropped={sample.DroppedFrames} poolOutstanding={sample.PoolStatistics.Outstanding} " +
+                        $"poolPeak={sample.PoolStatistics.PeakOutstanding}");
                     nextSampleAt = elapsed + TimeSpan.FromSeconds(options.SampleSeconds);
                 }
             }
@@ -112,6 +132,7 @@ try
         }
 
         droppedFrames += source.DroppedCount;
+        finalPoolStatistics = source.MemoryPoolStatistics;
     }
 
     completed |= stopwatch.Elapsed >= measurementEndsAt;
@@ -136,9 +157,12 @@ var privateGrowthPercent = GrowthPercent(baseline?.PrivateBytes, final?.PrivateB
 var workingSetGrowthPercent = GrowthPercent(baseline?.WorkingSetBytes, final?.WorkingSetBytes);
 var monotonicPrivateSampleCount = CountMonotonicIncreases(samples.Select(sample => sample.PrivateBytes));
 var throughput = measuredSeconds > 0 ? measuredFrames / measuredSeconds : 0;
+var measuredDroppedFrames = Math.Max(0, droppedFrames - warmupDroppedFrames);
 var meetsS7 = options.Mode == "performance" && completed && measuredSeconds >= 600 && throughput >= 15;
 var meetsS8 = options.Mode == "stability" && completed && measuredSeconds >= 7200 &&
-              privateGrowthPercent is < 10 && monotonicPrivateSampleCount < Math.Max(1, samples.Count - 1);
+              privateGrowthPercent is < 10 && monotonicPrivateSampleCount < Math.Max(1, samples.Count - 1) &&
+              finalPoolStatistics.Outstanding == 0 &&
+              finalPoolStatistics.TotalRented == finalPoolStatistics.TotalReturned;
 var report = new AcceptanceReport(
     DateTimeOffset.Now,
     options,
@@ -150,7 +174,7 @@ var report = new AcceptanceReport(
     validFrames,
     notDetectedFrames,
     failedFrames,
-    droppedFrames,
+    measuredDroppedFrames,
     throughput,
     processingTimes.Average,
     processingTimes.Percentile(0.95),
@@ -160,6 +184,7 @@ var report = new AcceptanceReport(
     monotonicPrivateSampleCount,
     meetsS7,
     meetsS8,
+    finalPoolStatistics,
     samples);
 await File.WriteAllTextAsync(
     outputPath,
@@ -170,7 +195,8 @@ Console.WriteLine(
     $"throughput={throughput:F2} avgMs={report.AverageProcessingMilliseconds:F2} " +
     $"p95Ms={report.P95ProcessingMilliseconds:F2} p99Ms={report.P99ProcessingMilliseconds:F2} " +
     $"privateGrowth={privateGrowthPercent:F2}% workingSetGrowth={workingSetGrowthPercent:F2}% " +
-    $"s7={meetsS7} s8={meetsS8} report={outputPath}");
+    $"poolOutstanding={finalPoolStatistics.Outstanding} poolRented={finalPoolStatistics.TotalRented} " +
+    $"poolReturned={finalPoolStatistics.TotalReturned} s7={meetsS7} s8={meetsS8} report={outputPath}");
 
 return completed && measuredFrames > 0 && failedFrames == 0 ? 0 : 2;
 
@@ -287,7 +313,8 @@ internal sealed record ResourceSample(
     long WorkingSetBytes,
     long PrivateBytes,
     long Frames,
-    long DroppedFrames);
+    long DroppedFrames,
+    ImageMemoryPoolStatistics PoolStatistics);
 
 internal sealed class ProcessingHistogram
 {
@@ -352,4 +379,5 @@ internal sealed record AcceptanceReport(
     int MonotonicPrivateSampleCount,
     bool MeetsS7,
     bool MeetsS8,
+    ImageMemoryPoolStatistics FinalPoolStatistics,
     IReadOnlyList<ResourceSample> Samples);
