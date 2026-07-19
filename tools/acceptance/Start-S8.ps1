@@ -39,8 +39,8 @@ $process = Start-Process -FilePath $powershell `
 
 [pscustomobject]@{
     ProcessId = $process.Id
-    StartedAt = $startedAt
-    ExpectedEndAt = $startedAt.AddSeconds(7230)
+    StartedAt = $startedAt.ToString('o')
+    ExpectedEndAt = $startedAt.AddSeconds(7230).ToString('o')
     ReportPath = 'artifacts/acceptance/s8-stability.json'
     StandardOutputPath = 'artifacts/acceptance/s8-stdout.log'
     StandardErrorPath = 'artifacts/acceptance/s8-stderr.log'

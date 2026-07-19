@@ -15,6 +15,8 @@ if (-not (Test-Path -LiteralPath $metadataPath))
 
 $metadata = Get-Content -Raw -LiteralPath $metadataPath | ConvertFrom-Json
 $running = [bool](Get-Process -Id $metadata.ProcessId -ErrorAction SilentlyContinue)
+$startedAt = ([DateTimeOffset]$metadata.StartedAt).ToLocalTime()
+$expectedEndAt = ([DateTimeOffset]$metadata.ExpectedEndAt).ToLocalTime()
 $exitCode = if (Test-Path -LiteralPath $exitCodePath) { [int](Get-Content -Raw -LiteralPath $exitCodePath) } else { $null }
 $report = if (-not $running -and (Test-Path -LiteralPath $reportPath))
 {
@@ -28,8 +30,8 @@ else
 [pscustomobject]@{
     ProcessId = $metadata.ProcessId
     Running = $running
-    StartedAt = $metadata.StartedAt
-    ExpectedEndAt = $metadata.ExpectedEndAt
+    StartedAt = $startedAt
+    ExpectedEndAt = $expectedEndAt
     ExitCode = $exitCode
     Completed = $report.Completed
     MeasuredSeconds = $report.MeasuredSeconds
