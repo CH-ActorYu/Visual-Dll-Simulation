@@ -151,10 +151,27 @@ finally
 
 process.Refresh();
 var measuredSeconds = Math.Max(0, stopwatch.Elapsed.TotalSeconds - options.WarmupSeconds);
-var baseline = samples.FirstOrDefault();
-var final = samples.LastOrDefault();
-var privateGrowthPercent = GrowthPercent(baseline?.PrivateBytes, final?.PrivateBytes);
-var workingSetGrowthPercent = GrowthPercent(baseline?.WorkingSetBytes, final?.WorkingSetBytes);
+var resourceWindowSeconds = options.Mode == "stability" ? Math.Min(600, measuredSeconds / 2) : 0;
+var baselineWindow = options.Mode == "stability"
+    ? samples.Where(sample => sample.ElapsedSeconds < resourceWindowSeconds).ToArray()
+    : samples.Take(1).ToArray();
+var finalWindow = options.Mode == "stability"
+    ? samples.Where(sample => sample.ElapsedSeconds >= measuredSeconds - resourceWindowSeconds).ToArray()
+    : samples.TakeLast(1).ToArray();
+var resourceWindows = new ResourceWindowSummary(
+    resourceWindowSeconds,
+    baselineWindow.Length,
+    finalWindow.Length,
+    AverageOrNull(baselineWindow, sample => sample.PrivateBytes),
+    AverageOrNull(finalWindow, sample => sample.PrivateBytes),
+    AverageOrNull(baselineWindow, sample => sample.WorkingSetBytes),
+    AverageOrNull(finalWindow, sample => sample.WorkingSetBytes));
+var privateGrowthPercent = GrowthPercent(
+    resourceWindows.BaselinePrivateBytes,
+    resourceWindows.FinalPrivateBytes);
+var workingSetGrowthPercent = GrowthPercent(
+    resourceWindows.BaselineWorkingSetBytes,
+    resourceWindows.FinalWorkingSetBytes);
 var monotonicPrivateSampleCount = CountMonotonicIncreases(samples.Select(sample => sample.PrivateBytes));
 var throughput = measuredSeconds > 0 ? measuredFrames / measuredSeconds : 0;
 var measuredDroppedFrames = Math.Max(0, droppedFrames - warmupDroppedFrames);
@@ -179,6 +196,7 @@ var report = new AcceptanceReport(
     processingTimes.Average,
     processingTimes.Percentile(0.95),
     processingTimes.Percentile(0.99),
+    resourceWindows,
     privateGrowthPercent,
     workingSetGrowthPercent,
     monotonicPrivateSampleCount,
@@ -194,7 +212,8 @@ Console.WriteLine(
     $"ACCEPTANCE_RESULT mode={options.Mode} completed={completed} measuredSeconds={measuredSeconds:F1} " +
     $"throughput={throughput:F2} avgMs={report.AverageProcessingMilliseconds:F2} " +
     $"p95Ms={report.P95ProcessingMilliseconds:F2} p99Ms={report.P99ProcessingMilliseconds:F2} " +
-    $"privateGrowth={privateGrowthPercent:F2}% workingSetGrowth={workingSetGrowthPercent:F2}% " +
+    $"memoryWindow={resourceWindowSeconds:F0}s privateGrowth={privateGrowthPercent:F2}% " +
+    $"workingSetGrowth={workingSetGrowthPercent:F2}% " +
     $"poolOutstanding={finalPoolStatistics.Outstanding} poolRented={finalPoolStatistics.TotalRented} " +
     $"poolReturned={finalPoolStatistics.TotalReturned} s7={meetsS7} s8={meetsS8} report={outputPath}");
 
@@ -223,7 +242,12 @@ static void CreateVideo(string path, int width, int height, double fps, int fram
 
 static double ToMb(long bytes) => bytes / 1024d / 1024d;
 
-static double? GrowthPercent(long? baseline, long? final) =>
+static double? AverageOrNull(
+    IReadOnlyCollection<ResourceSample> samples,
+    Func<ResourceSample, long> selector) =>
+    samples.Count == 0 ? null : samples.Average(sample => (double)selector(sample));
+
+static double? GrowthPercent(double? baseline, double? final) =>
     baseline is > 0 && final is not null ? (final.Value - baseline.Value) * 100d / baseline.Value : null;
 
 static int CountMonotonicIncreases(IEnumerable<long> values)
@@ -316,6 +340,15 @@ internal sealed record ResourceSample(
     long DroppedFrames,
     ImageMemoryPoolStatistics PoolStatistics);
 
+internal sealed record ResourceWindowSummary(
+    double WindowSeconds,
+    int BaselineSampleCount,
+    int FinalSampleCount,
+    double? BaselinePrivateBytes,
+    double? FinalPrivateBytes,
+    double? BaselineWorkingSetBytes,
+    double? FinalWorkingSetBytes);
+
 internal sealed class ProcessingHistogram
 {
     private const double BinWidthMilliseconds = 0.1;
@@ -374,6 +407,7 @@ internal sealed record AcceptanceReport(
     double AverageProcessingMilliseconds,
     double P95ProcessingMilliseconds,
     double P99ProcessingMilliseconds,
+    ResourceWindowSummary ResourceWindows,
     double? PrivateGrowthPercent,
     double? WorkingSetGrowthPercent,
     int MonotonicPrivateSampleCount,

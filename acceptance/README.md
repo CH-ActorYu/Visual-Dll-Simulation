@@ -36,7 +36,7 @@ dotnet run --project acceptance/Visual.AcceptanceRunner -c Release -- --mode per
 dotnet run --project acceptance/Visual.AcceptanceRunner -c Release -- --mode stability
 ```
 
-JSON 报告默认写入 `artifacts/acceptance/`。运行器每 10 秒输出进度，并记录吞吐、处理耗时平均/P95/P99、丢帧、托管堆、Working Set 和 Private Bytes。
+JSON 报告默认写入 `artifacts/acceptance/`。运行器每 10 秒输出进度，并记录吞吐、处理耗时平均/P95/P99、丢帧、托管堆、Working Set 和 Private Bytes。S8 的内存增长率使用正式统计期首尾各 10 分钟样本均值计算，报告中的 `ResourceWindows` 保存窗口秒数、样本数及基线/结束均值；最终还要求帧池无未归还租约且总租借数等于总归还数。
 
 两小时测试建议使用后台管理脚本：
 
