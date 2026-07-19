@@ -8,6 +8,7 @@ $metadataPath = Join-Path $artifactRoot 's8-process.json'
 $stdoutPath = Join-Path $artifactRoot 's8-stdout.log'
 $stderrPath = Join-Path $artifactRoot 's8-stderr.log'
 $exitCodePath = Join-Path $artifactRoot 's8-exit-code.txt'
+$reportPath = Join-Path $artifactRoot 's8-stability.json'
 $project = Join-Path $repositoryRoot 'acceptance\Visual.AcceptanceRunner\Visual.AcceptanceRunner.csproj'
 $worker = Join-Path $repositoryRoot 'tools\acceptance\Invoke-S8Worker.ps1'
 
@@ -24,7 +25,7 @@ if (Test-Path -LiteralPath $metadataPath)
 dotnet build $project -c Release --nologo
 if ($LASTEXITCODE -ne 0) { throw 'Acceptance runner Release build failed.' }
 
-Remove-Item -LiteralPath $stdoutPath,$stderrPath,$exitCodePath -Force -ErrorAction SilentlyContinue
+Remove-Item -LiteralPath $stdoutPath,$stderrPath,$exitCodePath,$reportPath -Force -ErrorAction SilentlyContinue
 $startedAt = [DateTimeOffset]::Now
 $powershell = (Get-Process -Id $PID).Path
 $workerArguments = "-NoProfile -ExecutionPolicy Bypass -File `"$worker`""
