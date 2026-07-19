@@ -20,7 +20,8 @@ public sealed class OpenCvFrameSourceFactory : IFrameSourceFactory
             FrameSourceKind.VideoFile => new OpenCvVideoFileSource(
                 descriptor.SourceId,
                 descriptor.Location!,
-                capacity),
+                capacity,
+                ReadBoolean(descriptor, "LoopPlayback", false)),
             FrameSourceKind.ImageFolder => new OpenCvImageFolderSource(
                 descriptor.SourceId,
                 descriptor.Location!,
@@ -69,6 +70,18 @@ public sealed class OpenCvFrameSourceFactory : IFrameSourceFactory
 
         return double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value) &&
                double.IsFinite(value) && value > 0
+               ? value
+               : throw OpenCvErrors.Invalid($"Frame source option {key} is invalid.");
+    }
+
+    private static bool ReadBoolean(FrameSourceDescriptor descriptor, string key, bool fallback)
+    {
+        if (!descriptor.Options.TryGetValue(key, out var text))
+        {
+            return fallback;
+        }
+
+        return bool.TryParse(text, out var value)
             ? value
             : throw OpenCvErrors.Invalid($"Frame source option {key} is invalid.");
     }

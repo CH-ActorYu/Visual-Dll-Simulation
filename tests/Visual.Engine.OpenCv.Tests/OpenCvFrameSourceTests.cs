@@ -100,6 +100,35 @@ public sealed class OpenCvFrameSourceTests
     }
 
     [Fact]
+    public async Task Looping_video_source_should_continue_after_last_frame()
+    {
+        var folder = CreateTemporaryFolder();
+        try
+        {
+            var path = Path.Combine(folder, "loop.avi");
+            WriteVideo(path);
+            await using var source = new OpenCvVideoFileSource("loop", path, loopPlayback: true);
+
+            await source.OpenAsync();
+            await source.StartAsync();
+            await using var frames = source.ReadFramesAsync().GetAsyncEnumerator();
+            for (var index = 0; index < 5; index++)
+            {
+                Assert.True(await frames.MoveNextAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5)));
+                using var frame = frames.Current;
+                Assert.Equal(index, frame.Frame.Info.FrameIndex);
+            }
+
+            Assert.True(source.LoopPlayback);
+            await source.StopAsync();
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task Unavailable_camera_should_report_device_lost()
     {
         await using var source = new OpenCvCameraSource("unavailable", int.MaxValue);
@@ -119,6 +148,13 @@ public sealed class OpenCvFrameSourceTests
             options: new Dictionary<string, string> { ["DeviceIndex"] = "2" }));
 
         Assert.IsType<OpenCvCameraSource>(camera);
+
+        var video = Assert.IsType<OpenCvVideoFileSource>(factory.Create(new FrameSourceDescriptor(
+            "video",
+            FrameSourceKind.VideoFile,
+            "sample.avi",
+            new Dictionary<string, string> { ["LoopPlayback"] = "true" })));
+        Assert.True(video.LoopPlayback);
 
         var exception = Assert.Throws<VisionException>(() => factory.Create(new FrameSourceDescriptor(
             "camera",

@@ -7,18 +7,26 @@ namespace Visual.Engine.OpenCv.Contracts;
 public sealed class OpenCvVideoFileSource : OpenCvFrameSourceBase
 {
     private readonly string _path;
+    private readonly bool _loopPlayback;
     private readonly PlaybackControl _playback = new();
     private VideoCapture? _capture;
 
-    public OpenCvVideoFileSource(string sourceId, string path, int bufferCapacity = 3)
+    public OpenCvVideoFileSource(
+        string sourceId,
+        string path,
+        int bufferCapacity = 3,
+        bool loopPlayback = false)
         : base(sourceId, bufferCapacity)
     {
         _path = string.IsNullOrWhiteSpace(path)
             ? throw OpenCvErrors.Invalid("A video file path is required.")
             : Path.GetFullPath(path);
+        _loopPlayback = loopPlayback;
     }
 
     public bool IsPaused => _playback.IsPaused;
+
+    public bool LoopPlayback => _loopPlayback;
 
     public ValueTask PauseAsync()
     {
@@ -84,7 +92,16 @@ public sealed class OpenCvVideoFileSource : OpenCvFrameSourceBase
             await _playback.WaitAsync(cancellationToken).ConfigureAwait(false);
             if (!capture.Read(frame) || frame.Empty())
             {
-                return;
+                if (!_loopPlayback)
+                {
+                    return;
+                }
+
+                capture.PosFrames = 0;
+                if (!capture.Read(frame) || frame.Empty())
+                {
+                    return;
+                }
             }
 
             Publish(frame);

@@ -18,7 +18,7 @@ Console.CancelKeyPress += (_, eventArgs) =>
     cancellation.Cancel();
 };
 
-var processingTimes = new List<double>();
+var processingTimes = new ProcessingHistogram();
 var samples = new List<ResourceSample>();
 var process = Process.GetCurrentProcess();
 var profile = DetectionProfile.CreateDefault();
@@ -58,7 +58,11 @@ try
 
     while (stopwatch.Elapsed < measurementEndsAt && !cancellation.IsCancellationRequested)
     {
-        await using var source = new OpenCvVideoFileSource(options.SourceId, videoPath, bufferCapacity: 3);
+        await using var source = new OpenCvVideoFileSource(
+            options.SourceId,
+            videoPath,
+            bufferCapacity: 3,
+            loopPlayback: true);
         await foreach (var batch in service.MeasureStreamAsync(source, [target], cancellation.Token))
         {
             totalFrames++;
@@ -126,7 +130,6 @@ finally
 
 process.Refresh();
 var measuredSeconds = Math.Max(0, stopwatch.Elapsed.TotalSeconds - options.WarmupSeconds);
-var sorted = processingTimes.Order().ToArray();
 var baseline = samples.FirstOrDefault();
 var final = samples.LastOrDefault();
 var privateGrowthPercent = GrowthPercent(baseline?.PrivateBytes, final?.PrivateBytes);
@@ -149,9 +152,9 @@ var report = new AcceptanceReport(
     failedFrames,
     droppedFrames,
     throughput,
-    Average(sorted),
-    Percentile(sorted, 0.95),
-    Percentile(sorted, 0.99),
+    processingTimes.Average,
+    processingTimes.Percentile(0.95),
+    processingTimes.Percentile(0.99),
     privateGrowthPercent,
     workingSetGrowthPercent,
     monotonicPrivateSampleCount,
@@ -193,19 +196,6 @@ static void CreateVideo(string path, int width, int height, double fps, int fram
 }
 
 static double ToMb(long bytes) => bytes / 1024d / 1024d;
-
-static double Average(double[] values) => values.Length == 0 ? 0 : values.Average();
-
-static double Percentile(double[] values, double percentile)
-{
-    if (values.Length == 0)
-    {
-        return 0;
-    }
-
-    var index = Math.Clamp((int)Math.Ceiling(values.Length * percentile) - 1, 0, values.Length - 1);
-    return values[index];
-}
 
 static double? GrowthPercent(long? baseline, long? final) =>
     baseline is > 0 && final is not null ? (final.Value - baseline.Value) * 100d / baseline.Value : null;
@@ -298,6 +288,48 @@ internal sealed record ResourceSample(
     long PrivateBytes,
     long Frames,
     long DroppedFrames);
+
+internal sealed class ProcessingHistogram
+{
+    private const double BinWidthMilliseconds = 0.1;
+    private readonly long[] _bins = new long[10_001];
+    private long _count;
+    private double _sum;
+
+    public double Average => _count == 0 ? 0 : _sum / _count;
+
+    public void Add(double milliseconds)
+    {
+        var index = Math.Clamp(
+            (int)Math.Ceiling(milliseconds / BinWidthMilliseconds),
+            0,
+            _bins.Length - 1);
+        _bins[index]++;
+        _count++;
+        _sum += milliseconds;
+    }
+
+    public double Percentile(double percentile)
+    {
+        if (_count == 0)
+        {
+            return 0;
+        }
+
+        var target = (long)Math.Ceiling(_count * percentile);
+        long cumulative = 0;
+        for (var index = 0; index < _bins.Length; index++)
+        {
+            cumulative += _bins[index];
+            if (cumulative >= target)
+            {
+                return index * BinWidthMilliseconds;
+            }
+        }
+
+        return (_bins.Length - 1) * BinWidthMilliseconds;
+    }
+}
 
 internal sealed record AcceptanceReport(
     DateTimeOffset CreatedAt,
