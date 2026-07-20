@@ -54,14 +54,20 @@
             </Grid.ColumnDefinitions>
             <Border Grid.Column="0" Background="Black" BorderBrush="#38424D" BorderThickness="1" CornerRadius="4" Margin="0,0,10,0">
                 <Grid x:Name="PreviewViewport" ClipToBounds="True" Background="Black"
+                      Cursor="Cross"
                       MouseLeftButtonDown="Preview_MouseLeftButtonDown"
+                      MouseMove="Preview_MouseMove"
                       MouseLeftButtonUp="Preview_MouseLeftButtonUp"
+                      LostMouseCapture="Preview_LostMouseCapture"
                       SizeChanged="Preview_SizeChanged">
                     <Image Source="{Binding PreviewImage}" Stretch="Uniform" IsHitTestVisible="False" />
                     <Canvas IsHitTestVisible="False">
+                        <Rectangle x:Name="RoiDraftRectangle"
+                                   Stroke="#A6F2FF" StrokeThickness="2" StrokeDashArray="5,3"
+                                   Fill="#3028D7FF" Visibility="Collapsed" Panel.ZIndex="100" />
                         <Rectangle Canvas.Left="{Binding Overlay.SelectionX}" Canvas.Top="{Binding Overlay.SelectionY}"
                                    Width="{Binding Overlay.SelectionWidth}" Height="{Binding Overlay.SelectionHeight}"
-                                   Stroke="#28D7FF" StrokeThickness="2" Fill="#2028D7FF"
+                                   Stroke="#28D7FF" StrokeThickness="3" Fill="#2828D7FF"
                                    Visibility="{Binding Overlay.HasSelection, Converter={StaticResource BooleanToVisibilityConverter}}" />
                         <Rectangle Canvas.Left="{Binding Overlay.TargetX}" Canvas.Top="{Binding Overlay.TargetY}"
                                    Width="{Binding Overlay.TargetWidth}" Height="{Binding Overlay.TargetHeight}"
@@ -75,7 +81,16 @@
                                 Visibility="{Binding Overlay.HasSelection, Converter={StaticResource BooleanToVisibilityConverter}}">
                             <TextBlock Text="{Binding DistanceText}" FontSize="16" FontWeight="SemiBold" Foreground="#7BE4FF" />
                         </Border>
+                        <Border Canvas.Left="{Binding Overlay.SelectionX}" Canvas.Top="{Binding Overlay.SelectionY}"
+                                Margin="6,6,0,0" Background="#E628D7FF" CornerRadius="3" Padding="7,3"
+                                Visibility="{Binding Overlay.HasSelection, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <TextBlock Text="ROI 已选定" FontSize="13" FontWeight="Bold" Foreground="#071A20" />
+                        </Border>
                     </Canvas>
+                    <Border HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="10"
+                            Background="#B3111820" CornerRadius="3" Padding="8,4" IsHitTestVisible="False">
+                        <TextBlock Text="按住鼠标左键拖动框选 ROI" Foreground="#DCE8EF" />
+                    </Border>
                 </Grid>
             </Border>
 

@@ -1,6 +1,7 @@
 using Microsoft.Win32;
 using System.ComponentModel;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
 using Visual.Abstractions.Contracts;
 using Visual.App.ViewModels;
@@ -13,6 +14,7 @@ namespace Visual.App;
 public partial class MainWindow : Window
 {
     private readonly MainViewModel _viewModel;
+    private Point? _roiDragStart;
     private bool _allowClose;
 
     public MainWindow(MainViewModel viewModel)
@@ -40,8 +42,33 @@ public partial class MainWindow : Window
     private void Preview_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         var point = e.GetPosition(PreviewViewport);
-        _viewModel.BeginRoi(new Point2D(point.X, point.Y));
+        if (!_viewModel.BeginRoi(new Point2D(point.X, point.Y)))
+        {
+            return;
+        }
+
+        _roiDragStart = point;
+        Canvas.SetLeft(RoiDraftRectangle, point.X);
+        Canvas.SetTop(RoiDraftRectangle, point.Y);
+        RoiDraftRectangle.Width = 0;
+        RoiDraftRectangle.Height = 0;
+        RoiDraftRectangle.Visibility = Visibility.Visible;
         PreviewViewport.CaptureMouse();
+        e.Handled = true;
+    }
+
+    private void Preview_MouseMove(object sender, MouseEventArgs e)
+    {
+        if (_roiDragStart is not { } start || e.LeftButton != MouseButtonState.Pressed)
+        {
+            return;
+        }
+
+        var current = e.GetPosition(PreviewViewport);
+        Canvas.SetLeft(RoiDraftRectangle, Math.Min(start.X, current.X));
+        Canvas.SetTop(RoiDraftRectangle, Math.Min(start.Y, current.Y));
+        RoiDraftRectangle.Width = Math.Abs(current.X - start.X);
+        RoiDraftRectangle.Height = Math.Abs(current.Y - start.Y);
     }
 
     private void Preview_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
@@ -52,6 +79,19 @@ public partial class MainWindow : Window
             PreviewViewport.ActualWidth,
             PreviewViewport.ActualHeight);
         PreviewViewport.ReleaseMouseCapture();
+        HideDraftRoi();
+        e.Handled = true;
+    }
+
+    private void Preview_LostMouseCapture(object sender, MouseEventArgs e)
+    {
+        HideDraftRoi();
+    }
+
+    private void HideDraftRoi()
+    {
+        _roiDragStart = null;
+        RoiDraftRectangle.Visibility = Visibility.Collapsed;
     }
 
     private void Preview_SizeChanged(object sender, SizeChangedEventArgs e)

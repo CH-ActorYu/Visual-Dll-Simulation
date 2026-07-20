@@ -112,7 +112,18 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
         ApplyCalibrationCommand.NotifyCanExecuteChanged();
     }
 
-    public void BeginRoi(Point2D viewportPoint) => _roiController.Begin(viewportPoint);
+    public bool BeginRoi(Point2D viewportPoint)
+    {
+        if (_imageSize is null)
+        {
+            DiagnosticText = "请先启动视频，显示画面后再框选 ROI";
+            return false;
+        }
+
+        _roiController.Begin(viewportPoint);
+        DiagnosticText = "正在框选 ROI…";
+        return true;
+    }
 
     public bool CompleteRoi(Point2D viewportPoint, double width, double height)
     {
@@ -131,7 +142,7 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
             return false;
         }
 
-        DiagnosticText = $"ROI: {accepted.Value.X}, {accepted.Value.Y}, {accepted.Value.Width}×{accepted.Value.Height}";
+        DiagnosticText = $"ROI 已选定：{accepted.Value.X}, {accepted.Value.Y}, {accepted.Value.Width}×{accepted.Value.Height}";
         return true;
     }
 
