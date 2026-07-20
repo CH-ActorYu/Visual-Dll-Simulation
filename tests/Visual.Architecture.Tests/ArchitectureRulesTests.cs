@@ -23,6 +23,13 @@ public sealed class ArchitectureRulesTests
         "Cognex.VisionPro"
     ];
 
+    private static readonly string[] DesktopUiNamespaces =
+    [
+        "System.Windows",
+        "Microsoft.UI",
+        "Avalonia"
+    ];
+
     [Fact]
     public void Core_projects_must_not_depend_on_native_vision_sdks()
     {
@@ -72,6 +79,23 @@ public sealed class ArchitectureRulesTests
             .SelectMany(assembly => assembly.GetExportedTypes())
             .SelectMany(GetPublicSignatureTypes)
             .Where(type => IsNativeSdkName(type.FullName ?? type.Name))
+            .Select(type => type.FullName ?? type.Name)
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Empty(violations);
+    }
+
+    [Fact]
+    public void Public_contracts_must_not_expose_desktop_ui_types()
+    {
+        var violations = CoreAssemblyNames
+            .Select(LoadAssembly)
+            .SelectMany(assembly => assembly.GetExportedTypes())
+            .SelectMany(GetPublicSignatureTypes)
+            .Where(type => DesktopUiNamespaces.Any(namespaceName =>
+                (type.FullName ?? type.Name).StartsWith(namespaceName, StringComparison.Ordinal)))
             .Select(type => type.FullName ?? type.Name)
             .Distinct(StringComparer.Ordinal)
             .Order(StringComparer.Ordinal)
