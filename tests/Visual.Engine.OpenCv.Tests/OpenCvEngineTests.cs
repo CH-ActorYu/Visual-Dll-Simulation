@@ -23,6 +23,7 @@ public sealed class OpenCvEngineTests
         Assert.IsType<OpenCvBlobDetector>(engine.CreateDetector(DetectionProfile.CreateDefault()));
         Assert.IsType<OpenCvTracker>(engine.CreateTracker(DetectionProfile.CreateDefault()));
         Assert.IsType<OpenCvTargetModelFactory>(engine.CreateTargetModelFactory());
+        Assert.IsType<OpenCvTargetModelTracker>(engine.CreateTargetModelTracker(DetectionProfile.CreateDefault()));
         Assert.IsType<OpenCvDefaultPreprocessOperator>(engine.CreatePreprocessor(DetectionProfile.CreateDefault()));
     }
 

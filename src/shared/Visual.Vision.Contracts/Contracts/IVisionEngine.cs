@@ -10,5 +10,7 @@ public interface IVisionEngine
 
     ITargetModelFactory CreateTargetModelFactory();
 
+    ITargetModelTracker CreateTargetModelTracker(DetectionProfile profile);
+
     IPreprocessOperator CreatePreprocessor(DetectionProfile profile);
 }

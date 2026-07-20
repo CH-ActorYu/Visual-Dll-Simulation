@@ -35,6 +35,12 @@ public sealed class OpenCvEngine : IVisionEngine
         return new OpenCvTargetModelFactory();
     }
 
+    public ITargetModelTracker CreateTargetModelTracker(DetectionProfile profile)
+    {
+        EnsureAvailable();
+        return new OpenCvTargetModelTracker(profile);
+    }
+
     public IPreprocessOperator CreatePreprocessor(DetectionProfile profile)
     {
         EnsureAvailable();

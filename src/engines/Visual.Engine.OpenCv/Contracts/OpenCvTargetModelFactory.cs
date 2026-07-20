@@ -46,8 +46,11 @@ public sealed class OpenCvTargetModelFactory : ITargetModelFactory
             Cv2.DrawContours(targetMask, [contour], 0, Scalar.White, -1);
 
             var localBounds = Cv2.BoundingRect(contour);
-            var simplified = Simplify(contour);
-            var shape = CreateShape(simplified, contour, selection.Bounds, localBounds, profile.MeasureAxis);
+            var shape = OpenCvTargetGeometry.CreateShape(
+                contour,
+                selection.Bounds.X,
+                selection.Bounds.Y,
+                profile.MeasureAxis);
             using var maskView = new Mat(targetMask, localBounds);
             Mat? ownedMask = maskView.Clone();
             Mat? ownedTemplate = null;
@@ -144,47 +147,6 @@ public sealed class OpenCvTargetModelFactory : ITargetModelFactory
         }
 
         return best ?? throw OpenCvErrors.Module("No target contour matched the registration profile.");
-    }
-
-    private static Point[] Simplify(Point[] contour)
-    {
-        var epsilon = Math.Max(1, Cv2.ArcLength(contour, true) * 0.01);
-        var simplified = Cv2.ApproxPolyDP(contour, epsilon, true);
-        return simplified.Length >= 3 ? simplified : contour;
-    }
-
-    private static TargetShape CreateShape(
-        IReadOnlyList<Point> simplified,
-        IReadOnlyList<Point> original,
-        RoiRect selectionBounds,
-        Rect localBounds,
-        PixelMeasureAxis measureAxis)
-    {
-        var globalContour = simplified
-            .Select(point => new Point2D(selectionBounds.X + point.X, selectionBounds.Y + point.Y))
-            .ToArray();
-        var bounds = new RoiRect(
-            selectionBounds.X + localBounds.X,
-            selectionBounds.Y + localBounds.Y,
-            localBounds.Width,
-            localBounds.Height);
-        var moments = Cv2.Moments(original);
-        var center = Math.Abs(moments.M00) > double.Epsilon
-            ? new Point2D(
-                selectionBounds.X + moments.M10 / moments.M00,
-                selectionBounds.Y + moments.M01 / moments.M00)
-            : new Point2D(bounds.X + bounds.Width / 2d, bounds.Y + bounds.Height / 2d);
-        var rotated = Cv2.MinAreaRect(original);
-        var pixelSize = measureAxis switch
-        {
-            PixelMeasureAxis.Horizontal => localBounds.Width,
-            PixelMeasureAxis.Vertical => localBounds.Height,
-            PixelMeasureAxis.MajorAxis => Math.Max(rotated.Size.Width, rotated.Size.Height),
-            PixelMeasureAxis.MinorAxis => Math.Min(rotated.Size.Width, rotated.Size.Height),
-            _ => throw OpenCvErrors.Invalid($"Unsupported measure axis {measureAxis}.")
-        };
-
-        return new TargetShape(globalContour, bounds, center, measureAxis, pixelSize);
     }
 
     private static Mat CreateTransparentPreview(

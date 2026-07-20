@@ -59,6 +59,9 @@ internal sealed class TestEngine(
     public ITargetModelFactory CreateTargetModelFactory() =>
         throw new NotSupportedException();
 
+    public ITargetModelTracker CreateTargetModelTracker(DetectionProfile profile) =>
+        throw new NotSupportedException();
+
     public IPreprocessOperator CreatePreprocessor(DetectionProfile profile) => throw new NotSupportedException();
 }
 
