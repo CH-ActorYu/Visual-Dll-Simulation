@@ -1,6 +1,10 @@
+using System.Buffers;
+using System.Diagnostics;
 using System.IO;
+using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using System.Windows.Threading;
 using Visual.Abstractions.Contracts;
 using Visual.AppCore.Interaction;
 using Visual.AppCore.Runtime;
@@ -15,11 +19,18 @@ namespace Visual.App.ViewModels;
 public sealed class MainViewModel : ObservableObject, IAsyncDisposable
 {
     private const string TargetId = "target-1";
+    private const double PreviewFramesPerSecond = 15;
+    private static readonly long PreviewIntervalTicks =
+        Math.Max(1, (long)(Stopwatch.Frequency / PreviewFramesPerSecond));
     private readonly IFrameSourceFactory _sourceFactory;
     private readonly ModuleCatalog _catalog;
     private readonly ConfigurationService _configuration;
     private readonly RoiInteractionController _roiController;
     private readonly OverlayRenderer _overlayRenderer;
+    private readonly Dispatcher _dispatcher;
+    private readonly LatestDisposableSlot<FrameUiSnapshot> _pendingUiFrame = new();
+    private readonly SemaphoreSlim _sourceCloseGate = new(1, 1);
+    private readonly object _stateSync = new();
     private readonly DetectionProfile _profile = DetectionProfile.CreateDefault();
     private CancellationTokenSource? _runCancellation;
     private TaskCompletionSource? _runCompletion;
@@ -36,7 +47,10 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
     private string? _currentSourceId;
     private double _viewportWidth;
     private double _viewportHeight;
+    private long _nextPreviewTimestamp;
+    private int _uiDrainScheduled;
     private int _disposeState;
+    private WriteableBitmap? _previewBitmap;
     private ViewportOverlay _overlay = new(0, 0, 0, 0, false, 0, 0, 0, 0, false, 0, 0, false, string.Empty);
 
     public MainViewModel(
@@ -51,6 +65,7 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
         _configuration = configuration;
         _roiController = roiController;
         _overlayRenderer = overlayRenderer;
+        _dispatcher = Dispatcher.CurrentDispatcher;
         Engines = catalog.GetEngines();
         SelectedEngine = Engines.FirstOrDefault(info => info.IsAvailable) ?? Engines.FirstOrDefault();
         Calibration = new CalibrationViewModel();
@@ -114,10 +129,13 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
 
     public bool BeginRoi(Point2D viewportPoint)
     {
-        if (_imageSize is null)
+        lock (_stateSync)
         {
-            DiagnosticText = "请先启动视频，显示画面后再框选 ROI";
-            return false;
+            if (_imageSize is null)
+            {
+                DiagnosticText = "请先启动视频，显示画面后再框选 ROI";
+                return false;
+            }
         }
 
         _roiController.Begin(viewportPoint);
@@ -127,7 +145,13 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
 
     public bool CompleteRoi(Point2D viewportPoint, double width, double height)
     {
-        if (_imageSize is not { } imageSize || width <= 0 || height <= 0)
+        ImageSize? currentImageSize;
+        lock (_stateSync)
+        {
+            currentImageSize = _imageSize;
+        }
+
+        if (currentImageSize is not { } imageSize || width <= 0 || height <= 0)
         {
             return false;
         }
@@ -172,53 +196,21 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
             await ReplaceDistanceServiceAsync(SelectedEngine.Id);
         }
 
-        _runCancellation = new CancellationTokenSource();
-        _runCompletion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var token = _runCancellation.Token;
+        var runCancellation = new CancellationTokenSource();
+        var runCompletion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _runCancellation = runCancellation;
+        _runCompletion = runCompletion;
+        var token = runCancellation.Token;
+        _nextPreviewTimestamp = 0;
         _currentSourceId = System.IO.Path.GetFullPath(VideoPath);
-        _source = _sourceFactory.Create(new FrameSourceDescriptor(_currentSourceId, FrameSourceKind.VideoFile, VideoPath));
+        var source = _sourceFactory.Create(new FrameSourceDescriptor(_currentSourceId, FrameSourceKind.VideoFile, VideoPath));
+        _source = source;
         IsRunning = true;
         StatusText = _distanceService!.IsCalibrated ? "测量中" : "未标定";
 
         try
         {
-            await _source.OpenAsync(token);
-            await _source.StartAsync(token);
-            await foreach (var lease in _source.ReadFramesAsync(token))
-            {
-                using (lease)
-                {
-                    var frame = lease.Frame;
-                    _imageSize = frame.Info.Size;
-                    PreviewImage = CreateBitmap(frame);
-                    ApplyCalibrationCommand.NotifyCanExecuteChanged();
-                    var roi = _roiController.ClampTo(frame.Info.Size) ??
-                              new RoiRect(0, 0, frame.Info.Size.Width, frame.Info.Size.Height);
-                    DistanceMeasurement? measurement = null;
-                    try
-                    {
-                        var results = await _distanceService.MeasureAsync(
-                            new DistanceRequest(frame, [new TargetRegion(TargetId, roi)]), token);
-                        measurement = results[0];
-                        StatusText = measurement.Status switch
-                        {
-                            VisionResultStatus.Valid => "测量中",
-                            VisionResultStatus.NotDetected => "未检出",
-                            VisionResultStatus.NotCalibrated => "未标定",
-                            _ => "测量失败"
-                        };
-                        DistanceText = measurement.Distance is { } distance ? $"{distance:F1} {measurement.Unit}" : "--";
-                    }
-                    catch (NotCalibratedException)
-                    {
-                        StatusText = "未标定";
-                        DistanceText = "--";
-                    }
-
-                    DiagnosticText = $"{frame.Info.Size.Width}×{frame.Info.Size.Height} | {frame.Info.FrameIndex} 帧 | 丢帧 {_source.DroppedCount}";
-                    UpdateOverlay(measurement);
-                }
-            }
+            await Task.Run(() => ProcessFramesAsync(source, token), CancellationToken.None);
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
@@ -230,26 +222,197 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
         }
         finally
         {
-            await CloseSourceAsync();
-            IsRunning = false;
+            await Task.Run(async () => await CloseSourceAsync(), CancellationToken.None);
             if (StatusText is "测量中" or "未检出")
             {
                 StatusText = "未启动";
             }
 
-            _runCompletion.TrySetResult();
+            runCancellation.Dispose();
+            _runCancellation = null;
+            runCompletion.TrySetResult();
+            _runCompletion = null;
+            IsRunning = false;
         }
     }
 
     private async Task StopAsync()
     {
         _runCancellation?.Cancel();
-        await Task.Yield();
+        if (_runCompletion is not { } completion)
+        {
+            return;
+        }
+
+        try
+        {
+            await completion.Task.WaitAsync(TimeSpan.FromSeconds(3));
+        }
+        catch (TimeoutException)
+        {
+            StatusText = "停止超时";
+            DiagnosticText = "视频任务未在 3 秒内停止，请关闭软件或检查视频解码器";
+        }
+    }
+
+    private async Task ProcessFramesAsync(IFrameSource source, CancellationToken cancellationToken)
+    {
+        await source.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await source.StartAsync(cancellationToken).ConfigureAwait(false);
+        await foreach (var lease in source.ReadFramesAsync(cancellationToken).ConfigureAwait(false))
+        {
+            using (lease)
+            {
+                var frame = lease.Frame;
+                lock (_stateSync)
+                {
+                    _imageSize = frame.Info.Size;
+                }
+
+                var roi = _roiController.ClampTo(frame.Info.Size) ??
+                          new RoiRect(0, 0, frame.Info.Size.Width, frame.Info.Size.Height);
+                DistanceMeasurement? measurement = null;
+                string statusText;
+                string distanceText;
+                try
+                {
+                    var results = await _distanceService!.MeasureAsync(
+                        new DistanceRequest(frame, [new TargetRegion(TargetId, roi)]),
+                        cancellationToken).ConfigureAwait(false);
+                    measurement = results[0];
+                    statusText = measurement.Status switch
+                    {
+                        VisionResultStatus.Valid => "测量中",
+                        VisionResultStatus.NotDetected => "未检出",
+                        VisionResultStatus.NotCalibrated => "未标定",
+                        _ => "测量失败"
+                    };
+                    distanceText = measurement.Distance is { } distance
+                        ? $"{distance:F1} {measurement.Unit}"
+                        : "--";
+                }
+                catch (NotCalibratedException)
+                {
+                    statusText = "未标定";
+                    distanceText = "--";
+                }
+
+                if (ShouldPublishPreview())
+                {
+                    var diagnosticText =
+                        $"{frame.Info.Size.Width}×{frame.Info.Size.Height} | {frame.Info.FrameIndex} 帧 | 丢帧 {source.DroppedCount}";
+                    PublishUiFrame(FrameUiSnapshot.Create(
+                        frame,
+                        measurement,
+                        statusText,
+                        distanceText,
+                        diagnosticText));
+                }
+            }
+        }
+    }
+
+    private bool ShouldPublishPreview()
+    {
+        var now = Stopwatch.GetTimestamp();
+        if (now < _nextPreviewTimestamp)
+        {
+            return false;
+        }
+
+        _nextPreviewTimestamp = now + PreviewIntervalTicks;
+        return true;
+    }
+
+    private void PublishUiFrame(FrameUiSnapshot snapshot)
+    {
+        try
+        {
+            _pendingUiFrame.Publish(snapshot);
+            ScheduleUiDrain();
+        }
+        catch (ObjectDisposedException)
+        {
+            snapshot.Dispose();
+        }
+    }
+
+    private void ScheduleUiDrain()
+    {
+        if (Interlocked.CompareExchange(ref _uiDrainScheduled, 1, 0) != 0)
+        {
+            return;
+        }
+
+        try
+        {
+            _ = _dispatcher.BeginInvoke(DispatcherPriority.Render, DrainUiFrame);
+        }
+        catch (InvalidOperationException)
+        {
+            Volatile.Write(ref _uiDrainScheduled, 0);
+        }
+    }
+
+    private void DrainUiFrame()
+    {
+        try
+        {
+            using var snapshot = _pendingUiFrame.Take();
+            if (snapshot is not null)
+            {
+                ApplyUiFrame(snapshot);
+            }
+        }
+        finally
+        {
+            Volatile.Write(ref _uiDrainScheduled, 0);
+            if (_pendingUiFrame.HasValue)
+            {
+                ScheduleUiDrain();
+            }
+        }
+    }
+
+    private void ApplyUiFrame(FrameUiSnapshot snapshot)
+    {
+        var format = ToWpfPixelFormat(snapshot.Format);
+        if (_previewBitmap is null ||
+            _previewBitmap.PixelWidth != snapshot.Width ||
+            _previewBitmap.PixelHeight != snapshot.Height ||
+            _previewBitmap.Format != format)
+        {
+            _previewBitmap = new WriteableBitmap(
+                snapshot.Width,
+                snapshot.Height,
+                96,
+                96,
+                format,
+                null);
+            PreviewImage = _previewBitmap;
+        }
+
+        _previewBitmap.WritePixels(
+            new Int32Rect(0, 0, snapshot.Width, snapshot.Height),
+            snapshot.Buffer,
+            snapshot.Stride,
+            0);
+        StatusText = snapshot.StatusText;
+        DistanceText = snapshot.DistanceText;
+        DiagnosticText = snapshot.DiagnosticText;
+        ApplyCalibrationCommand.NotifyCanExecuteChanged();
+        UpdateOverlay(snapshot.Measurement);
     }
 
     private async Task ApplyCalibrationAsync()
     {
-        if (_distanceService is null || _imageSize is not { } imageSize)
+        ImageSize? currentImageSize;
+        lock (_stateSync)
+        {
+            currentImageSize = _imageSize;
+        }
+
+        if (_distanceService is null || currentImageSize is not { } imageSize)
         {
             StatusText = "请先启动视频以取得图像尺寸";
             return;
@@ -294,7 +457,13 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
 
     private void UpdateOverlay(DistanceMeasurement? measurement, double? width = null, double? height = null)
     {
-        if (_imageSize is not { } imageSize)
+        ImageSize? currentImageSize;
+        lock (_stateSync)
+        {
+            currentImageSize = _imageSize;
+        }
+
+        if (currentImageSize is not { } imageSize)
         {
             return;
         }
@@ -315,41 +484,33 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
 
     private async ValueTask CloseSourceAsync()
     {
-        if (_source is null)
+        await _sourceCloseGate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
+        try
         {
-            return;
+            var source = Interlocked.Exchange(ref _source, null);
+            if (source is null)
+            {
+                return;
+            }
+
+            try { await source.StopAsync(CancellationToken.None).ConfigureAwait(false); } catch { }
+            try { await source.CloseAsync(CancellationToken.None).ConfigureAwait(false); } catch { }
+            try { await source.DisposeAsync().ConfigureAwait(false); } catch { }
         }
-
-        try { await _source.StopAsync(CancellationToken.None); } catch { }
-        try { await _source.CloseAsync(CancellationToken.None); } catch { }
-        await _source.DisposeAsync();
-        _source = null;
-        _runCancellation?.Dispose();
-        _runCancellation = null;
-    }
-
-    private static BitmapSource CreateBitmap(Visual.Image.Contracts.ImageFrame frame)
-    {
-        var format = frame.Format switch
+        finally
         {
-            PixelFormat.Gray8 => PixelFormats.Gray8,
-            PixelFormat.Bgr24 => PixelFormats.Bgr24,
-            PixelFormat.Bgra32 => PixelFormats.Bgra32,
-            PixelFormat.Rgb24 => PixelFormats.Rgb24,
-            _ => throw new NotSupportedException($"Unsupported pixel format {frame.Format}.")
-        };
-        var bitmap = BitmapSource.Create(
-            frame.Info.Size.Width,
-            frame.Info.Size.Height,
-            96,
-            96,
-            format,
-            null,
-            frame.Data.ToArray(),
-            frame.Stride);
-        bitmap.Freeze();
-        return bitmap;
+            _sourceCloseGate.Release();
+        }
     }
+
+    private static System.Windows.Media.PixelFormat ToWpfPixelFormat(PixelFormat format) => format switch
+    {
+        PixelFormat.Gray8 => PixelFormats.Gray8,
+        PixelFormat.Bgr24 => PixelFormats.Bgr24,
+        PixelFormat.Bgra32 => PixelFormats.Bgra32,
+        PixelFormat.Rgb24 => PixelFormats.Rgb24,
+        _ => throw new NotSupportedException($"Unsupported pixel format {format}.")
+    };
 
     public async ValueTask DisposeAsync()
     {
@@ -358,21 +519,111 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
             return;
         }
 
+        var runStopped = true;
         _runCancellation?.Cancel();
         if (_runCompletion is { } completion)
         {
-            await completion.Task;
+            try
+            {
+                await completion.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            }
+            catch (TimeoutException)
+            {
+                runStopped = false;
+                try
+                {
+                    await CloseSourceAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(2));
+                }
+                catch (TimeoutException)
+                {
+                }
+            }
         }
         else
         {
-            await CloseSourceAsync();
+            try
+            {
+                await CloseSourceAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(2));
+            }
+            catch (TimeoutException)
+            {
+                runStopped = false;
+            }
         }
 
-        if (_distanceService is not null)
+        _pendingUiFrame.Dispose();
+        if (runStopped && _distanceService is not null)
         {
             await PersistAsync();
             await _distanceService.DisposeAsync();
             _distanceService = null;
+        }
+    }
+}
+
+internal sealed class FrameUiSnapshot : IDisposable
+{
+    private byte[]? _buffer;
+
+    private FrameUiSnapshot(
+        byte[] buffer,
+        int width,
+        int height,
+        int stride,
+        PixelFormat format,
+        DistanceMeasurement? measurement,
+        string statusText,
+        string distanceText,
+        string diagnosticText)
+    {
+        _buffer = buffer;
+        Width = width;
+        Height = height;
+        Stride = stride;
+        Format = format;
+        Measurement = measurement;
+        StatusText = statusText;
+        DistanceText = distanceText;
+        DiagnosticText = diagnosticText;
+    }
+
+    public byte[] Buffer => _buffer ?? throw new ObjectDisposedException(nameof(FrameUiSnapshot));
+    public int Width { get; }
+    public int Height { get; }
+    public int Stride { get; }
+    public PixelFormat Format { get; }
+    public DistanceMeasurement? Measurement { get; }
+    public string StatusText { get; }
+    public string DistanceText { get; }
+    public string DiagnosticText { get; }
+
+    public static FrameUiSnapshot Create(
+        Visual.Image.Contracts.ImageFrame frame,
+        DistanceMeasurement? measurement,
+        string statusText,
+        string distanceText,
+        string diagnosticText)
+    {
+        var buffer = ArrayPool<byte>.Shared.Rent(frame.Data.Length);
+        frame.Data.Span.CopyTo(buffer);
+        return new FrameUiSnapshot(
+            buffer,
+            frame.Info.Size.Width,
+            frame.Info.Size.Height,
+            frame.Stride,
+            frame.Format,
+            measurement,
+            statusText,
+            distanceText,
+            diagnosticText);
+    }
+
+    public void Dispose()
+    {
+        var buffer = Interlocked.Exchange(ref _buffer, null);
+        if (buffer is not null)
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
         }
     }
 }

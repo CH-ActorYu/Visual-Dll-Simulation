@@ -41,13 +41,21 @@ public partial class App : Application
             var viewModel = _services.GetRequiredService<MainViewModel>();
             await viewModel.InitializeAsync();
             var window = _services.GetRequiredService<MainWindow>();
-            if (e.Args.Contains("--smoke-test", StringComparer.OrdinalIgnoreCase))
+            var smokeTest = e.Args.Contains("--smoke-test", StringComparer.OrdinalIgnoreCase);
+            var videoSmokeTest = e.Args.Contains("--video-smoke-test", StringComparer.OrdinalIgnoreCase);
+            if (smokeTest || videoSmokeTest)
             {
                 window.ShowActivated = false;
                 window.ShowInTaskbar = false;
                 window.Opacity = 0;
                 window.Loaded += async (_, _) =>
                 {
+                    if (videoSmokeTest)
+                    {
+                        viewModel.StartCommand.Execute(null);
+                        await Task.Delay(TimeSpan.FromSeconds(30));
+                    }
+
                     await viewModel.DisposeAsync();
                     window.Close();
                 };

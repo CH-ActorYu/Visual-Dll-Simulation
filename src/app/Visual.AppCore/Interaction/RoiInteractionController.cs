@@ -5,22 +5,44 @@ namespace Visual.AppCore.Interaction;
 public sealed class RoiInteractionController
 {
     public const int MinimumSize = 16;
+    private readonly object _sync = new();
     private Point2D? _start;
+    private RoiRect? _currentRoi;
 
-    public RoiRect? CurrentRoi { get; private set; }
+    public RoiRect? CurrentRoi
+    {
+        get
+        {
+            lock (_sync)
+            {
+                return _currentRoi;
+            }
+        }
+    }
 
-    public void Begin(Point2D viewportPoint) => _start = viewportPoint;
+    public void Begin(Point2D viewportPoint)
+    {
+        lock (_sync)
+        {
+            _start = viewportPoint;
+        }
+    }
 
     public RoiRect? Complete(Point2D viewportPoint, ViewportTransform transform)
     {
-        if (_start is not { } start || transform.Width <= 0 || transform.Height <= 0)
+        Point2D? start;
+        lock (_sync)
         {
+            start = _start;
             _start = null;
+        }
+
+        if (start is not { } firstPoint || transform.Width <= 0 || transform.Height <= 0)
+        {
             return null;
         }
 
-        _start = null;
-        var first = transform.ToImage(start);
+        var first = transform.ToImage(firstPoint);
         var second = transform.ToImage(viewportPoint);
         var left = Math.Clamp((int)Math.Floor(Math.Min(first.X, second.X)), 0, transform.ImageSize.Width - 1);
         var top = Math.Clamp((int)Math.Floor(Math.Min(first.Y, second.Y)), 0, transform.ImageSize.Height - 1);
@@ -32,15 +54,32 @@ public sealed class RoiInteractionController
             return null;
         }
 
-        CurrentRoi = new RoiRect(left, top, right - left, bottom - top);
-        return CurrentRoi;
+        var accepted = new RoiRect(left, top, right - left, bottom - top);
+        lock (_sync)
+        {
+            _currentRoi = accepted;
+        }
+
+        return accepted;
     }
 
-    public void Restore(RoiRect? roi) => CurrentRoi = roi;
+    public void Restore(RoiRect? roi)
+    {
+        lock (_sync)
+        {
+            _currentRoi = roi;
+        }
+    }
 
     public RoiRect? ClampTo(ImageSize imageSize)
     {
-        if (CurrentRoi is not { } roi)
+        RoiRect? current;
+        lock (_sync)
+        {
+            current = _currentRoi;
+        }
+
+        if (current is not { } roi)
         {
             return null;
         }
@@ -50,23 +89,35 @@ public sealed class RoiInteractionController
             var clamped = roi.ClampTo(imageSize);
             if (clamped.Width < MinimumSize || clamped.Height < MinimumSize)
             {
-                CurrentRoi = null;
+                lock (_sync)
+                {
+                    _currentRoi = null;
+                }
                 return null;
             }
 
-            CurrentRoi = clamped;
+            lock (_sync)
+            {
+                _currentRoi = clamped;
+            }
             return clamped;
         }
         catch (VisionException exception) when (exception.ErrorCode == VisionErrorCode.InvalidInput)
         {
-            CurrentRoi = null;
+            lock (_sync)
+            {
+                _currentRoi = null;
+            }
             return null;
         }
     }
 
     public void Clear()
     {
-        _start = null;
-        CurrentRoi = null;
+        lock (_sync)
+        {
+            _start = null;
+            _currentRoi = null;
+        }
     }
 }
