@@ -56,6 +56,9 @@ internal sealed class TestEngine(
     public ITracker CreateTracker(DetectionProfile profile) =>
         trackerFactory?.Invoke() ?? new TestTracker();
 
+    public ITargetModelFactory CreateTargetModelFactory() =>
+        throw new NotSupportedException();
+
     public IPreprocessOperator CreatePreprocessor(DetectionProfile profile) => throw new NotSupportedException();
 }
 

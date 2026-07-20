@@ -25,7 +25,7 @@ public sealed class OpenCvBlobDetector : ITargetDetector
             using var full = _adapter.ToMat(frame);
             var region = new Rect(actualRoi.X, actualRoi.Y, actualRoi.Width, actualRoi.Height);
             using var roiMat = new Mat(full.Mat, region);
-            using var processed = PreprocessRoi(roiMat, frame.Format);
+            using var processed = OpenCvSegmentation.Segment(roiMat, frame.Format, _profile);
             Cv2.FindContours(
                 processed,
                 out Point[][] contours,
@@ -67,53 +67,6 @@ public sealed class OpenCvBlobDetector : ITargetDetector
         {
             throw OpenCvErrors.Normalize(exception, "OpenCV Blob detection failed.");
         }
-    }
-
-    private Mat PreprocessRoi(Mat source, Visual.Image.Contracts.PixelFormat format)
-    {
-        using var gray = new Mat();
-        if (format == Visual.Image.Contracts.PixelFormat.Gray8)
-        {
-            source.CopyTo(gray);
-        }
-        else
-        {
-            var conversion = format switch
-            {
-                Visual.Image.Contracts.PixelFormat.Bgr24 => ColorConversionCodes.BGR2GRAY,
-                Visual.Image.Contracts.PixelFormat.Rgb24 => ColorConversionCodes.RGB2GRAY,
-                Visual.Image.Contracts.PixelFormat.Bgra32 => ColorConversionCodes.BGRA2GRAY,
-                _ => throw OpenCvErrors.Invalid($"Unsupported detector input format {format}.")
-            };
-            Cv2.CvtColor(source, gray, conversion);
-        }
-
-        using var blurred = new Mat();
-        Cv2.GaussianBlur(
-            gray,
-            blurred,
-            new Size(_profile.BlurKernelSize, _profile.BlurKernelSize),
-            0);
-        using var thresholded = new Mat();
-        var thresholdType = _profile.ForegroundPolarity == ForegroundPolarity.Bright
-            ? ThresholdTypes.Binary
-            : ThresholdTypes.BinaryInv;
-        var threshold = _profile.ManualThreshold;
-        if (_profile.ThresholdMode == ThresholdMode.Otsu)
-        {
-            thresholdType |= ThresholdTypes.Otsu;
-            threshold = 0;
-        }
-
-        Cv2.Threshold(blurred, thresholded, threshold, 255, thresholdType);
-        using var kernel = Cv2.GetStructuringElement(
-            MorphShapes.Rect,
-            new Size(_profile.MorphologyKernelSize, _profile.MorphologyKernelSize));
-        using var opened = new Mat();
-        Cv2.MorphologyEx(thresholded, opened, MorphTypes.Open, kernel);
-        var result = new Mat();
-        Cv2.MorphologyEx(opened, result, MorphTypes.Close, kernel);
-        return result;
     }
 
     private bool IsValid(Rect box, double areaRatio)

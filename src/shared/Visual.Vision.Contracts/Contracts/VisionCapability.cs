@@ -9,5 +9,6 @@ public enum VisionCapability
     Tracking = 1 << 2,
     Camera = 1 << 3,
     IntrinsicCalibration = 1 << 4,
-    ThreeD = 1 << 5
+    ThreeD = 1 << 5,
+    TargetRegistration = 1 << 6
 }

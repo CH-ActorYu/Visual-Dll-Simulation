@@ -29,6 +29,12 @@ public sealed class OpenCvEngine : IVisionEngine
         return new OpenCvTracker(profile.RedetectInterval);
     }
 
+    public ITargetModelFactory CreateTargetModelFactory()
+    {
+        EnsureAvailable();
+        return new OpenCvTargetModelFactory();
+    }
+
     public IPreprocessOperator CreatePreprocessor(DetectionProfile profile)
     {
         EnsureAvailable();
@@ -58,7 +64,8 @@ public sealed class OpenCvEngine : IVisionEngine
                 true,
                 VisionLicenseState.NotRequired,
                 VisionCapability.Preprocess | VisionCapability.Detection |
-                VisionCapability.Tracking | VisionCapability.Camera);
+                VisionCapability.Tracking | VisionCapability.Camera |
+                VisionCapability.TargetRegistration);
         }
         catch
         {

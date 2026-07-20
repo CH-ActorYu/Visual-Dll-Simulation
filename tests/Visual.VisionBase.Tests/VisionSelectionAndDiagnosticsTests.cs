@@ -87,6 +87,9 @@ public sealed class VisionSelectionAndDiagnosticsTests
 
         public ITracker CreateTracker(DetectionProfile profile) => throw new NotSupportedException();
 
+        public ITargetModelFactory CreateTargetModelFactory() =>
+            throw new NotSupportedException();
+
         public IPreprocessOperator CreatePreprocessor(DetectionProfile profile) => throw new NotSupportedException();
     }
 }

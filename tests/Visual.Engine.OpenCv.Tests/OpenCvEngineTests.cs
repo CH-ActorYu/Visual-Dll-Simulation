@@ -17,10 +17,12 @@ public sealed class OpenCvEngineTests
         Assert.True(engine.Info.IsAvailable);
         Assert.True(engine.Info.Supports(
             VisionCapability.Preprocess | VisionCapability.Detection |
-            VisionCapability.Tracking | VisionCapability.Camera));
+            VisionCapability.Tracking | VisionCapability.Camera |
+            VisionCapability.TargetRegistration));
         Assert.Equal(VisionLicenseState.NotRequired, engine.Info.LicenseState);
         Assert.IsType<OpenCvBlobDetector>(engine.CreateDetector(DetectionProfile.CreateDefault()));
         Assert.IsType<OpenCvTracker>(engine.CreateTracker(DetectionProfile.CreateDefault()));
+        Assert.IsType<OpenCvTargetModelFactory>(engine.CreateTargetModelFactory());
         Assert.IsType<OpenCvDefaultPreprocessOperator>(engine.CreatePreprocessor(DetectionProfile.CreateDefault()));
     }
 
